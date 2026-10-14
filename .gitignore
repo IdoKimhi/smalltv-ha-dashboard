@@ -1,0 +1,5 @@
+# Local backups of earlier builds and re-generatable source folders
+ha-dashboard/v1.*/
+*-source.zip
+docs/frames/
+personal/

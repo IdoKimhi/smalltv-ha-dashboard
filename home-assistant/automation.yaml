@@ -1,0 +1,61 @@
+alias: SmallTV theme data
+description: Writes /config/www/smalltv.json for the HA Dashboard and HA Neon themes
+triggers:
+  - trigger: time_pattern
+    seconds: /30
+  - trigger: homeassistant
+    event: start
+actions:
+  - action: weather.get_forecasts
+    target:
+      entity_id: '{{ wx }}'
+    data:
+      type: daily
+    response_variable: fc
+  - variables:
+      smalltv: >-
+        {% set wi_map = {'sunny':0,'clear-night':1,'partlycloudy':7,'rainy':3,'pouring':3,'lightning-rainy':4,'lightning':4,'snowy':5,'snowy-rainy':5,'windy':6,'windy-variant':6} -%}
+        {% set names = {'sunny':'Sunny','clear-night':'Clear','partlycloudy':'Partly cloudy','cloudy':'Cloudy','fog':'Fog','rainy':'Rain','pouring':'Heavy rain','lightning-rainy':'Storm','lightning':'Storm','snowy':'Snow','windy':'Windy'} -%}
+        {% set w = states(wx) -%}
+        {% set t_txt = (state_attr(wx,'temperature') | float(0) | round(0) | int) | string -%}
+        {% set fcl = fc[wx].forecast if (fc is defined and fc is not none and wx in fc) else [] -%}
+        {% set day = fcl[0] if fcl | length > 0 else {} -%}
+        {% set home = state_attr('climate.living_room','current_temperature') -%}
+        {% set h_txt = ((home | float(0) | round(0) | int) | string) if home is not none else '--' -%}
+        {% set hum = state_attr(met,'humidity') -%}
+        {% set wind = state_attr(wx,'wind_speed') -%}
+        {% set wind = wind if wind is not none else state_attr(met,'wind_speed') -%}
+        {% set pp_raw = states(rain_pp) -%}
+        {% set pp = (pp_raw | float) if pp_raw | is_number else day.get('precipitation_probability') -%}
+        {% set pmm = day.get('precipitation') -%}
+        {% set pmm_r = (pmm | float(0) | round(1)) if pmm is not none else none -%}
+        {% set pmm_s = ((pmm_r | int | string) if pmm_r == (pmm_r | int) else (pmm_r | string)) if pmm_r is not none else '' -%}
+        {% set pp_txt = ((pp | float(0) | round(0) | int) ~ '%') if pp is not none else ((pmm_s ~ 'mm') if pmm is not none else '--') -%}
+        {% set pph = 1 if (pp is not none and pp | float(0) >= 50) or (pp is none and pmm | float(0) >= 1) else 0 -%}
+        {{ {
+          'wx': {
+            't': t_txt,
+            'h': h_txt,
+            'c': names.get(w, w | capitalize),
+            'hu': ((hum | float(0) | round(0) | int) ~ '%') if hum is not none else '--',
+            'pp': pp_txt,
+            'pph': pph,
+            'w': ((wind | float(0) | round(0) | int) | string) if wind is not none else '--',
+            'wi': wi_map.get(w, 2)
+          },
+          'pve': {
+            'cpu': states('sensor.proxmox_package_id_0_temperature') | float(0) | round(0) | int,
+            'ram': states('sensor.proxmox_memory_usage') | float(0) | round(0) | int,
+            'bk': states('sensor.proxmox_backup_disk_usage') | float(0) | round(0) | int,
+            'tl': t_txt | length,
+            'hl': h_txt | length
+          }
+        } }}
+  - action: shell_command.smalltv_json
+    data:
+      data: "{{ smalltv | to_json | base64_encode }}"
+variables:
+  wx: weather.home
+  met: weather.forecast_home
+  rain_pp: sensor.rain_probability_today
+mode: restart

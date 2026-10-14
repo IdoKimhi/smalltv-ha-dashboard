@@ -1,0 +1,135 @@
+alias: SmallTV theme data
+description: Writes /config/www/smalltv.json for all themes, including the Proxmox details used by HA Glance
+triggers:
+  - trigger: time_pattern
+    seconds: /30
+  - trigger: homeassistant
+    event: start
+actions:
+  - action: weather.get_forecasts
+    target:
+      entity_id: '{{ wx }}'
+    data:
+      type: daily
+    response_variable: fc
+  # Glances on the Proxmox host (rest_command.glances in configuration.yaml).
+  # A failed call only blanks its own fields on the screen.
+  - action: rest_command.glances
+    data: { ep: uptime }
+    response_variable: r_up
+    continue_on_error: true
+  - action: rest_command.glances
+    data: { ep: load }
+    response_variable: r_load
+    continue_on_error: true
+  - action: rest_command.glances
+    data: { ep: cpu }
+    response_variable: r_cpu
+    continue_on_error: true
+  - action: rest_command.glances
+    data: { ep: memswap }
+    response_variable: r_swap
+    continue_on_error: true
+  - action: rest_command.glances
+    data: { ep: fs }
+    response_variable: r_fs
+    continue_on_error: true
+  - action: rest_command.glances
+    data: { ep: network }
+    response_variable: r_net
+    continue_on_error: true
+  - action: rest_command.glances
+    data: { ep: alert }
+    response_variable: r_alert
+    continue_on_error: true
+  - variables:
+      smalltv: >-
+        {% set wi_map = {'sunny':0,'clear-night':1,'partlycloudy':7,'rainy':3,'pouring':3,'lightning-rainy':4,'lightning':4,'snowy':5,'snowy-rainy':5,'windy':6,'windy-variant':6} -%}
+        {% set names = {'sunny':'Sunny','clear-night':'Clear','partlycloudy':'Partly cloudy','cloudy':'Cloudy','fog':'Fog','rainy':'Rain','pouring':'Heavy rain','lightning-rainy':'Storm','lightning':'Storm','snowy':'Snow','windy':'Windy'} -%}
+        {% set w = states(wx) -%}
+        {% set t_txt = (state_attr(wx,'temperature') | float(0) | round(0) | int) | string -%}
+        {% set fcl = fc[wx].forecast if (fc is defined and fc is not none and wx in fc) else [] -%}
+        {% set day = fcl[0] if fcl | length > 0 else {} -%}
+        {% set home = state_attr('climate.living_room','current_temperature') -%}
+        {% set h_txt = ((home | float(0) | round(0) | int) | string) if home is not none else '--' -%}
+        {% set hum = state_attr(met,'humidity') -%}
+        {% set wind = state_attr(wx,'wind_speed') -%}
+        {% set wind = wind if wind is not none else state_attr(met,'wind_speed') -%}
+        {% set pp_raw = states(rain_pp) -%}
+        {% set pp = (pp_raw | float) if pp_raw | is_number else day.get('precipitation_probability') -%}
+        {% set pmm = day.get('precipitation') -%}
+        {% set pmm_r = (pmm | float(0) | round(1)) if pmm is not none else none -%}
+        {% set pmm_s = ((pmm_r | int | string) if pmm_r == (pmm_r | int) else (pmm_r | string)) if pmm_r is not none else '' -%}
+        {% set pp_txt = ((pp | float(0) | round(0) | int) ~ '%') if pp is not none else ((pmm_s ~ 'mm') if pmm is not none else '--') -%}
+        {% set pph = 1 if (pp is not none and pp | float(0) >= 50) or (pp is none and pmm | float(0) >= 1) else 0 -%}
+        {#- Glances responses; anything missing falls back to '--' -#}
+        {% set g_up = r_up.content if (r_up is defined and r_up.status == 200) else none -%}
+        {% set g_load = r_load.content if (r_load is defined and r_load.status == 200) else none -%}
+        {% set g_cpu = r_cpu.content if (r_cpu is defined and r_cpu.status == 200) else none -%}
+        {% set g_swap = r_swap.content if (r_swap is defined and r_swap.status == 200) else none -%}
+        {% set g_fs = r_fs.content if (r_fs is defined and r_fs.status == 200) else [] -%}
+        {% set g_net = r_net.content if (r_net is defined and r_net.status == 200) else [] -%}
+        {% set g_alert = r_alert.content if (r_alert is defined and r_alert.status == 200) else [] -%}
+        {#- Uptime "8 days, 8:32:48" -> "up 8d 8h"; under a day -> "up 3h 12m" -#}
+        {% set us = g_up if g_up is string else '' -%}
+        {% set ud = (us.split(' day')[0] | int(0)) if 'day' in us else 0 -%}
+        {% set hms = us.split(', ')[-1].split(':') -%}
+        {% set up_txt = ('up ' ~ ud ~ 'd ' ~ (hms[0] | int(0)) ~ 'h') if ud > 0 else (('up ' ~ (hms[0] | int(0)) ~ 'h ' ~ (hms[1] | int(0)) ~ 'm') if hms | length == 3 else '--') -%}
+        {#- Running guests, counted from their network interfaces: tapNNNi0 = VM, vethNNNi0 = container -#}
+        {% set ifaces = g_net | map(attribute='interface_name') | list -%}
+        {% set guests = ((ifaces | select('match', 'tap[0-9]+i0$') | list | count) ~ 'VM ' ~ (ifaces | select('match', 'veth[0-9]+i0$') | list | count) ~ 'CT') if ifaces else '--' -%}
+        {#- Traffic on the host's physical NIC (set yours: see Glances /api/4/network), formatted as 820B/s, 6.4K/s, 48M/s -#}
+        {% set nic = g_net | selectattr('interface_name', 'eq', 'enp4s0') | list -%}
+        {% set ns = namespace(rates=[]) -%}
+        {% for b in ([nic[0].bytes_recv_rate_per_sec, nic[0].bytes_sent_rate_per_sec] if nic else []) -%}
+          {% set b = b | float(0) -%}
+          {% set ns.rates = ns.rates + [((b | int) ~ 'B/s') if b < 1000 else (((('%.1f' | format(b / 1000)) if b < 100000 else ((b / 1000) | round(0) | int | string)) ~ 'K/s') if b < 1000000 else ((('%.1f' | format(b / 1000000)) if b < 100000000 else ((b / 1000000) | round(0) | int | string)) ~ 'M/s'))] -%}
+        {% endfor -%}
+        {% set fs_root = g_fs | selectattr('mnt_point', 'eq', '/') | map(attribute='percent') | list -%}
+        {#- Second disk shown as NAS: set your mount point (see Glances /api/4/fs) -#}
+        {% set fs_nas = g_fs | selectattr('mnt_point', 'eq', '/mnt/storage') | map(attribute='percent') | list -%}
+        {#- Glances alerts still open (end = -1): 2 = critical, 1 = warning, 0 = none -#}
+        {% set open = g_alert | selectattr('end', 'eq', -1) | map(attribute='state') | list -%}
+        {{ {
+          'wx': {
+            't': t_txt,
+            'h': h_txt,
+            'c': names.get(w, w | capitalize),
+            'hu': ((hum | float(0) | round(0) | int) ~ '%') if hum is not none else '--',
+            'pp': pp_txt,
+            'pph': pph,
+            'w': ((wind | float(0) | round(0) | int) | string) if wind is not none else '--',
+            'wi': wi_map.get(w, 2)
+          },
+          'pve': {
+            'cpu': states('sensor.proxmox_package_id_0_temperature') | float(0) | round(0) | int,
+            'ram': states('sensor.proxmox_memory_usage') | float(0) | round(0) | int,
+            'bk': states('sensor.proxmox_backup_disk_usage') | float(0) | round(0) | int,
+            'tl': t_txt | length,
+            'hl': h_txt | length
+          },
+          'srv': {
+            'up': up_txt,
+            'g': guests,
+            'cu': (g_cpu.total | round(0) | int) if g_cpu is mapping else '--',
+            'ld': ('%.1f' | format(g_load.min1)) if g_load is mapping else '--',
+            'lp': ((g_load.min1 / g_load.cpucore * 100) | round(0) | int) if g_load is mapping else '--',
+            'io': (g_cpu.iowait | round(0) | int) if g_cpu is mapping else '--',
+            'sw': (g_swap.percent | round(0) | int) if g_swap is mapping else '--',
+            'dn': ns.rates[0] if ns.rates else '--',
+            'ul': ns.rates[1] if ns.rates else '--'
+          },
+          'dsk': {
+            'root': (fs_root[0] | round(0) | int) if fs_root else '--',
+            'nas': (fs_nas[0] | round(0) | int) if fs_nas else '--',
+            'al': 2 if 'CRITICAL' in open else (1 if 'WARNING' in open else 0)
+          }
+        } }}
+  - action: shell_command.smalltv_json
+    data:
+      data: "{{ smalltv | to_json | base64_encode }}"
+variables:
+  wx: weather.home
+  met: weather.forecast_home
+  rain_pp: sensor.rain_probability_today
+mode: restart

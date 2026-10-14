@@ -1,0 +1,17 @@
+# Add these to Home Assistant's configuration.yaml, then restart Home Assistant.
+# Create the /config/www folder first: files in it are served WITHOUT login at
+# http://<home-assistant>:8123/local/..., which is how the SmallTV reads the data.
+
+# Required by every theme: writes the JSON the TV polls.
+# The automation passes the payload base64-encoded, so no shell quoting can break it.
+shell_command:
+  smalltv_json: >-
+    python3 -c "import sys,base64;open('/config/www/smalltv.json','wb').write(base64.b64decode(sys.argv[1]))" {{ data }}
+
+# Only needed for the HA Glance theme (automation-glances.yaml):
+# reads Glances on the Proxmox host directly.
+rest_command:
+  glances:
+    url: "http://YOUR-PROXMOX-IP:61208/api/4/{{ ep }}"
+    method: get
+    timeout: 5
