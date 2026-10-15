@@ -31,6 +31,8 @@
 - [Version history](#version-history)
 - [Credits](#credits)
 
+No Home Assistant or home server? See [smalltv-clock-themes](https://github.com/IdoKimhi/smalltv-clock-themes): twelve clock and weather themes that get their weather straight from Open-Meteo.
+
 ---
 
 ## What it shows
