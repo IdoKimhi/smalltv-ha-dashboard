@@ -90,6 +90,11 @@ actions:
         {% set fs_nas = g_fs | selectattr('mnt_point', 'eq', '/mnt/storage') | map(attribute='percent') | list -%}
         {#- Glances alerts still open (end = -1): 2 = critical, 1 = warning, 0 = none -#}
         {% set open = g_alert | selectattr('end', 'eq', -1) | map(attribute='state') | list -%}
+        {#- NAS: the ZFS datasets under the NAS mount share one pool, so add up every dataset's used space
+            and divide by used + the shared free space. Falls back to the mount's own percentage. -#}
+        {% set nas_used = states.sensor | selectattr('entity_id', 'search', '^' ~ nas_prefix) | selectattr('entity_id', 'search', '_disk_used$') | map(attribute='state') | map('float', none) | reject('none') | list -%}
+        {% set nas_free = states(nas_prefix ~ '_disk_free') | float(none) -%}
+        {% set nas_pct = ((nas_used | sum) / ((nas_used | sum) + nas_free) * 100) if (nas_used and nas_free is not none and (nas_used | sum) + nas_free > 0) else states(nas_prefix ~ '_disk_usage') | float(none) -%}
         {{ {
           'wx': {
             't': t_txt,
@@ -105,6 +110,7 @@ actions:
             'cpu': states('sensor.proxmox_package_id_0_temperature') | float(0) | round(0) | int,
             'ram': states('sensor.proxmox_memory_usage') | float(0) | round(0) | int,
             'bk': states('sensor.proxmox_backup_disk_usage') | float(0) | round(0) | int,
+            'nas': (nas_pct | round(0) | int) if nas_pct is not none else '--',
             'tl': t_txt | length,
             'hl': h_txt | length
           },
@@ -130,6 +136,8 @@ actions:
       data: "{{ smalltv | to_json | base64_encode }}"
 variables:
   wx: weather.home
+  # Glances sensors of the NAS mount; every dataset below it (e.g. ..._nas_photos_*) is included
+  nas_prefix: sensor.proxmox_nas
   met: weather.forecast_home
   rain_pp: sensor.rain_probability_today
 mode: restart

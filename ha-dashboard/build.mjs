@@ -159,9 +159,9 @@ for (const STYLE of ['segmented', 'smooth']) {
 const NAME = STYLE === 'segmented' ? 'ha-dashboard' : 'ha-dashboard-smooth';
 assets = new Map(baseAssets);
 /* ---------- full-screen background: everything that never changes ---------- */
-const BAR_X = 74, BAR_W = 90, SEG = 6, SEGS = 15, RAM_Y = 192, BK_Y = 214, BAR_H = 12, UNLIT = '#262626';
+const BAR_X = 74, BAR_W = 90, SEG = 6, SEGS = 15, RAM_Y = 192, NAS_Y = 214, BAR_H = 12, UNLIT = '#262626';
 const RAM_RAMP = [[0, '#00FF88'], [0.6, '#7CFF4D'], [0.82, '#FFCC00'], [1, '#FF5555']];
-const BK_RAMP = [[0, '#4DA6FF'], [0.6, '#8AB4F8'], [0.82, '#FFCC00'], [1, '#FF5555']];
+const NAS_RAMP = [[0, '#4DA6FF'], [0.6, '#8AB4F8'], [0.82, '#FFCC00'], [1, '#FF5555']];
 const bg = canvas(240, 240);
 for (let y = 0; y < 240; y++) { bg.color(y < 66 ? mix('#122544', '#000000', y / 66) : '#000000'); bg.rect(0, y, 239, y); }
 // Divider lines that fade out towards the edges.
@@ -178,7 +178,7 @@ bg.color('#8AB4F8'); glyphs.humidity(bg, 8, 128);
 bg.color('#8AB4F8'); glyphs.rainSmall(bg, 90, 128);
 bg.color('#FFFFFF'); glyphs.windSmall(bg, 168, 128);
 // Fully lit bars; a mask layer hides the part above the current value.
-for (const [y, rampStops] of [[RAM_Y, RAM_RAMP], [BK_Y, BK_RAMP]]) {
+for (const [y, rampStops] of [[RAM_Y, RAM_RAMP], [NAS_Y, NAS_RAMP]]) {
   if (STYLE === 'segmented') for (let i = 0; i < SEGS; i++) {
     const c = ramp(rampStops, (i + 0.5) / SEGS), x = BAR_X + i * SEG;
     bg.color(c); bg.rect(x, y, x + SEG - 2, y + BAR_H - 1);
@@ -196,13 +196,13 @@ assets.set('images/bg-raw.png.sti', C.fromRGBA(240, 240, bg.px));
 const labels = (id, x, y, value, color) => ({ id, type: 'text', x, y, value, size: 16, color });
 const bgTheme = {
   spec: 1, theme: { id: 'bg', name: 'bg', author: 'x', version: '1' }, display: { width: 240, height: 240, background: '#000000' },
-  layers: [{ id: 'raw', type: 'image', x: 0, y: 0, source: 'images/bg-raw.png' }, labels('pve', 40, 166, 'Proxmox', '#FFFFFF'), labels('ram', 20, 190, 'RAM', '#C8D2DC'), labels('bk', 20, 212, 'Bkup', '#C8D2DC')],
+  layers: [{ id: 'raw', type: 'image', x: 0, y: 0, source: 'images/bg-raw.png' }, labels('pve', 40, 166, 'Proxmox', '#FFFFFF'), labels('ram', 20, 190, 'RAM', '#C8D2DC'), labels('nas', 20, 212, 'NAS', '#C8D2DC')],
 };
 assets.set('images/bg.png.sti', C.fromRGBA(240, 240, C.render(bgTheme, assets, null)));
 assets.delete('images/bg-raw.png.sti');
 // Drawn over the masks: segmented bars get their gap columns back, smooth bars get rounded ends.
-const overlay = canvas(BAR_W, BK_Y - RAM_Y + BAR_H).color('#000000'), R = BAR_H / 2;
-for (const y of [0, BK_Y - RAM_Y]) {
+const overlay = canvas(BAR_W, NAS_Y - RAM_Y + BAR_H).color('#000000'), R = BAR_H / 2;
+for (const y of [0, NAS_Y - RAM_Y]) {
   if (STYLE === 'segmented') for (let i = 1; i <= SEGS; i++) overlay.rect(i * SEG - 1, y, i * SEG - 1, y + BAR_H - 1);
   else for (let row = 0; row < BAR_H; row++) for (let i = 0; i < BAR_W; i++) {
     const cx = Math.min(Math.max(i + 0.5, R), BAR_W - R), cy = row + 0.5 - R;
@@ -230,14 +230,14 @@ const barMask = (id, y, source) => ({
 });
 
 const TEMP_STOPS = [[-50, '#8AB4F8'], [10, '#A8D8D8'], [18, '#FFCC00'], [28, '#FF9966'], [33, '#FF5555']];
-const RAM_STOPS = [[0, '#00FF88'], [91, '#FF5555']], BK_STOPS = [[0, '#8AB4F8'], [81, '#FFCC00'], [91, '#FF5555']], CPU_STOPS = [[0, '#FFFFFF'], [76, '#FF5555']];
+const RAM_STOPS = [[0, '#00FF88'], [91, '#FF5555']], NAS_STOPS = [[0, '#8AB4F8'], [81, '#FFCC00'], [91, '#FF5555']], CPU_STOPS = [[0, '#FFFFFF'], [76, '#FF5555']];
 const theme = {
   spec: 1,
-  theme: STYLE === 'segmented' ? { id: 'ha-dashboard', name: 'HA Dashboard', author: 'idokimhi', version: '1.4.0' } : { id: 'ha-dashboard-smooth', name: 'HA Dashboard Smooth', author: 'idokimhi', version: '1.4.0' },
+  theme: STYLE === 'segmented' ? { id: 'ha-dashboard', name: 'HA Dashboard', author: 'idokimhi', version: '1.5.0' } : { id: 'ha-dashboard-smooth', name: 'HA Dashboard Smooth', author: 'idokimhi', version: '1.5.0' },
   display: { width: 240, height: 240, background: '#000000' },
   data: [
     { id: 'wx', url: DATA_URL, interval: 30, fields: ['t', 'h', 'c', 'hu', 'pp', 'pph', 'w', 'wi'].map(id => ({ id, path: 'wx.' + id })) },
-    { id: 'pve', url: DATA_URL, interval: 30, fields: ['cpu', 'ram', 'bk', 'tl', 'hl'].map(id => ({ id, path: 'pve.' + id })) },
+    { id: 'pve', url: DATA_URL, interval: 30, fields: ['cpu', 'ram', 'nas', 'tl', 'hl'].map(id => ({ id, path: 'pve.' + id })) },
   ],
   layers: [
     image('bg', 0, 0, 'bg'),
@@ -261,10 +261,10 @@ const theme = {
     text('cpu', 206, 166, 'CPU {pve.cpu}', 16, '#FFFFFF', { anchor: 'top-right', bind: { color: stops('pve.cpu', ...CPU_STOPS) } }),
     degree('cpu-deg', 210, 169, 3, '#FFFFFF', 1, { stroke: stops('pve.cpu', ...CPU_STOPS) }),
     barMask('ram-mask', RAM_Y, 'pve.ram'),
-    barMask('bk-mask', BK_Y, 'pve.bk'),
+    barMask('nas-mask', NAS_Y, 'pve.nas'),
     image('bar-' + STYLE, BAR_X, RAM_Y, 'bar-' + STYLE),
     text('ram', 220, 190, '{pve.ram}%', 16, '#00FF88', { anchor: 'top-right', bind: { color: stops('pve.ram', ...RAM_STOPS) } }),
-    text('bk', 220, 212, '{pve.bk}%', 16, '#8AB4F8', { anchor: 'top-right', bind: { color: stops('pve.bk', ...BK_STOPS) } }),
+    text('nas', 220, 212, '{pve.nas}%', 16, '#8AB4F8', { anchor: 'top-right', bind: { color: stops('pve.nas', ...NAS_STOPS) } }),
   ],
 };
 
@@ -277,9 +277,9 @@ writeFileSync(new URL(NAME + '-source.zip', OUT), S.zip(await S.sourceFiles(them
 /* ---------- previews, rendered exactly as the device would ---------- */
 const sample = (o) => Object.fromEntries(Object.entries(o).flatMap(([s, f]) => Object.entries(f).map(([k, v]) => [s + '.' + k, String(v)])));
 const previews = {
-  'preview.png': sample({ wx: { t: 20, h: 25, c: 'Sunny', hu: '77%', pp: '0%', pph: 0, w: 8, wi: 0 }, pve: { cpu: 43, ram: 86, bk: 82, tl: 2, hl: 2 } }),
-  'preview-partly.png': sample({ wx: { t: 31, h: 26, c: 'Partly cloudy', hu: '45%', pp: '10%', pph: 0, w: 14, wi: 7 }, pve: { cpu: 52, ram: 47, bk: 63, tl: 2, hl: 2 } }),
-  'preview-alert.png': sample({ wx: { t: 7, h: 19, c: 'Storm', hu: '88%', pp: '80%', pph: 1, w: 31, wi: 4 }, pve: { cpu: 81, ram: 93, bk: 95, tl: 1, hl: 2 } }),
+  'preview.png': sample({ wx: { t: 20, h: 25, c: 'Sunny', hu: '77%', pp: '0%', pph: 0, w: 8, wi: 0 }, pve: { cpu: 43, ram: 86, nas: 40, tl: 2, hl: 2 } }),
+  'preview-partly.png': sample({ wx: { t: 31, h: 26, c: 'Partly cloudy', hu: '45%', pp: '10%', pph: 0, w: 14, wi: 7 }, pve: { cpu: 52, ram: 47, nas: 63, tl: 2, hl: 2 } }),
+  'preview-alert.png': sample({ wx: { t: 7, h: 19, c: 'Storm', hu: '88%', pp: '80%', pph: 1, w: 31, wi: 4 }, pve: { cpu: 81, ram: 93, nas: 95, tl: 1, hl: 2 } }),
 };
 const time = new Date(Date.UTC(2026, 9, 14, 21, 37, 42));
 const scaleUp = rgba => { const big = new Uint8ClampedArray(480 * 480 * 4); for (let y = 0; y < 480; y++) for (let x = 0; x < 480; x++) big.set(rgba.subarray(((y >> 1) * 240 + (x >> 1)) * 4, ((y >> 1) * 240 + (x >> 1)) * 4 + 4), (y * 480 + x) * 4); return big; };

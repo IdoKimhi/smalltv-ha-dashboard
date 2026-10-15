@@ -11,9 +11,9 @@ const C = await vite.ssrLoadModule('/src/core/core.ts');
 const load = path => C.unpack(readFileSync(new URL(path, ROOT)));
 const data = o => Object.fromEntries(Object.entries(o).flatMap(([s, f]) => Object.entries(f).map(([k, v]) => [s + '.' + k, String(v)])));
 
-const SUNNY = data({ wx: { t: 20, h: 25, c: 'Sunny', hu: '77%', pp: '0%', pph: 0, w: 8, wi: 0 }, pve: { cpu: 43, ram: 86, bk: 82, tl: 2, hl: 2 } });
-const STORM = data({ wx: { t: 7, h: 19, c: 'Storm', hu: '88%', pp: '80%', pph: 1, w: 31, wi: 4 }, pve: { cpu: 81, ram: 93, bk: 95, tl: 1, hl: 2 } });
-const PARTLY = data({ wx: { t: 31, h: 26, c: 'Partly cloudy', hu: '45%', pp: '10%', pph: 0, w: 14, wi: 7 }, pve: { cpu: 52, ram: 47, bk: 63, tl: 2, hl: 2 } });
+const SUNNY = data({ wx: { t: 20, h: 25, c: 'Sunny', hu: '77%', pp: '0%', pph: 0, w: 8, wi: 0 }, pve: { cpu: 43, ram: 86, nas: 40, bk: 82, tl: 2, hl: 2 } });
+const STORM = data({ wx: { t: 7, h: 19, c: 'Storm', hu: '88%', pp: '80%', pph: 1, w: 31, wi: 4 }, pve: { cpu: 81, ram: 93, nas: 95, bk: 95, tl: 1, hl: 2 } });
+const PARTLY = data({ wx: { t: 31, h: 26, c: 'Partly cloudy', hu: '45%', pp: '10%', pph: 0, w: 14, wi: 7 }, pve: { cpu: 52, ram: 47, nas: 63, bk: 63, tl: 2, hl: 2 } });
 const GLANCE = data({ wx: { t: 20, h: 25, wi: 0 }, pve: { cpu: 44, ram: 86, bk: 82 }, srv: { up: 'up 8d 8h', g: '5VM 4CT', cu: 14, ld: '1.2', lp: 15, io: 1, sw: 36, dn: '6.4K/s' }, dsk: { ul: '5.5K/s', root: 68, nas: 37, al: 1 } });
 
 // [output name, package, sample data, seconds, frame step in ms]

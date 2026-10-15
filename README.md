@@ -47,14 +47,14 @@
 | **Weather** | Animated icon, outdoor temperature, condition | `weather.home` |
 | **Home** | Indoor temperature next to a house icon | A climate entity's `current_temperature` |
 | **Details** | Humidity, chance of rain, wind | `weather.forecast_home`, a rain-probability sensor, the daily forecast |
-| **Proxmox** | CPU package temperature with a status dot, RAM and backup-disk usage bars | Glances sensors in Home Assistant |
+| **Proxmox** | CPU package temperature with a status dot, RAM and NAS usage bars | Glances sensors in Home Assistant |
 
 Everything reacts to the data:
 
 - **Temperature color:** the outdoor temperature shifts from blue (cold) through cyan, yellow and orange to red (33° and up).
 - **Rain warning:** when rain is likely (50% or more), the rain icon and its percentage turn a stronger blue.
 - **CPU:** the reading turns red above 75°C, and the status dot switches from a slow green pulse to a faster red one.
-- **Bars and percentages:** RAM turns red above 90%. Backup turns yellow above 80% and red above 90%.
+- **Bars and percentages:** RAM turns red above 90%. NAS turns yellow above 80% and red above 90%.
 
 ### Animated weather icons
 
@@ -208,7 +208,7 @@ Then pick one of:
 
 ## The JSON the TV reads
 
-The theme reads 13 fields from two groups. Values are pre-formatted strings or plain integers.
+The dashboard reads 13 fields from two groups. Values are pre-formatted strings or plain integers.
 
 | Field | Example | Used for |
 | --- | --- | --- |
@@ -222,9 +222,26 @@ The theme reads 13 fields from two groups. Values are pre-formatted strings or p
 | `wx.wi` | `0`–`7` | Which weather icon is shown (table below) |
 | `pve.cpu` | `43` | CPU package temperature in °C |
 | `pve.ram` | `86` | RAM usage % (bar and text) |
-| `pve.bk` | `82` | Backup disk usage % (bar and text) |
+| `pve.nas` | `40` | NAS usage % across all its ZFS datasets (bar and text) |
 | `pve.tl` | `2` | Number of characters in `wx.t`, used to place its `°` |
 | `pve.hl` | `2` | Number of characters in `wx.h`, used to place its `°` |
+
+The automation also writes `pve.bk` (backup disk usage %), which HA Neon still uses for its third gauge.
+
+### How the NAS percentage is calculated
+
+A ZFS pool is often split into datasets, each mounted separately and all sharing the pool's free space. For example:
+
+| Mount | Used | Free (shared) |
+| --- | --- | --- |
+| `/nas` | 340 GB | 590 GB |
+| `/nas/photos` | 40 GB | 590 GB |
+
+The usage percentage of `/nas` alone (37%) leaves out the child datasets. Instead, the automation adds up the `…_disk_used` sensor of every dataset whose entity ID starts with `nas_prefix`, and divides by used + free:
+
+> (340 + 40) ÷ (380 + 590) = **39%**
+
+If those sensors aren't found, it falls back to the mount's own `…_disk_usage` percentage, and shows `--` when there is nothing at all.
 
 | `wx.wi` | Icon | Home Assistant weather states |
 | --- | --- | --- |
@@ -250,6 +267,7 @@ Everything setup-specific lives in the automation and in the data URL. The repo 
 | Rain probability | `rain_pp: sensor.rain_probability_today` | Any % sensor; if it doesn't exist, the forecast is used |
 | Indoor temperature | `climate.living_room` → `current_temperature` | Any climate entity, or replace with `states('sensor.your_temp')` |
 | Proxmox sensors | `sensor.proxmox_package_id_0_temperature`, `sensor.proxmox_memory_usage`, `sensor.proxmox_backup_disk_usage` (Glances) | Your Glances entity IDs (the Glances integration names them after the host, e.g. `sensor.<host_ip>_memory_usage`) |
+| NAS sensors | `nas_prefix: sensor.proxmox_nas` (bottom of the automation) | The Glances entity ID prefix of your NAS mount, e.g. `sensor.<host_ip>_nas` for a mount at `/nas` |
 | Data URL in the theme | `http://YOUR-HA-IP:8123/local/smalltv.json` | Your Home Assistant address |
 | Glances address (HA Glance only) | `http://YOUR-PROXMOX-IP:61208` in `configuration.yaml` | Your Proxmox host |
 | Network interface / NAS disk (HA Glance only) | `enp4s0`, `/mnt/storage` in `automation-glances.yaml` | Your host's physical NIC and second mount point |
@@ -411,6 +429,7 @@ Each build also writes a `*-source.zip` (`theme.json` plus PNGs), which smalltv-
 
 | Version | Changes |
 | --- | --- |
+| 1.5 | The backup bar becomes a **NAS** bar: usage across every ZFS dataset under the NAS mount |
 | 1.4 | The sun sways instead of spinning; home icon back to 24px; home temperature at size 20, aligned with the outdoor reading |
 | 1.3 | Smooth-bar variant; calmer animations (half speed, 1px cloud drift, single lightning flash); larger home icon and temperature |
 | 1.2 | Larger degree signs |
